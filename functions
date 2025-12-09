@@ -1,6 +1,7 @@
--- Functions Module
+-- RainInforced Functions Module
 local Functions = {}
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local plr = Players.LocalPlayer
 
 Functions.RandomChar = function()
@@ -14,18 +15,210 @@ end
 
 Functions.ChangeToggleColor = function(Button)
     local led = Button.Ticket_Asset
-    if led.ImageColor3 == Color3.fromRGB(255, 0, 0) then
-        led.ImageColor3 = Color3.fromRGB(0, 255, 0)
-    else
-        led.ImageColor3 = Color3.fromRGB(255, 0, 0)
-    end
+    led.ImageColor3 = (led.ImageColor3 == Color3.fromRGB(255, 0, 0)) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
 end
 
 Functions.GetPing = function()
     return (game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())/1000
 end
 
--- Add ALL your other functions here...
--- (Copy GetPlayer, GetCharacter, GetRoot, TeleportTO, etc.)
+Functions.GetPlayer = function(UserDisplay)
+    if UserDisplay == "" then return nil end
+    for i,v in pairs(Players:GetPlayers()) do
+        if v.Name:lower():match(UserDisplay:lower()) or v.DisplayName:lower():match(UserDisplay:lower()) then
+            return v
+        end
+    end
+    return nil
+end
+
+Functions.GetCharacter = function(Player)
+    return Player.Character
+end
+
+Functions.GetRoot = function(Player)
+    if Functions.GetCharacter(Player) and Functions.GetCharacter(Player):FindFirstChild("HumanoidRootPart") then
+        return Functions.GetCharacter(Player).HumanoidRootPart
+    end
+end
+
+Functions.TeleportTO = function(posX,posY,posZ,player,method)
+    pcall(function()
+        local root = Functions.GetRoot(plr)
+        if method == "safe" then
+            task.spawn(function()
+                for i = 1,30 do
+                    task.wait()
+                    root.Velocity = Vector3.new(0,0,0)
+                    root.CFrame = (player == "pos") and CFrame.new(posX,posY,posZ) or CFrame.new(Functions.GetRoot(player).Position)+Vector3.new(0,2,0)
+                end
+            end)
+        else
+            root.Velocity = Vector3.new(0,0,0)
+            root.CFrame = (player == "pos") and CFrame.new(posX,posY,posZ) or CFrame.new(Functions.GetRoot(player).Position)+Vector3.new(0,2,0)
+        end
+    end)
+end
+
+Functions.PredictionTP = function(player,method)
+    local root = Functions.GetRoot(player)
+    local pos = root.Position
+    local vel = root.Velocity
+    local ping = Functions.GetPing()
+    Functions.GetRoot(plr).CFrame = CFrame.new(
+        pos.X + vel.X * ping * 3.5,
+        pos.Y + vel.Y * ping * 2,
+        pos.Z + vel.Z * ping * 3.5
+    )
+    if method == "safe" then
+        task.wait()
+        Functions.GetRoot(plr).CFrame = CFrame.new(pos)
+        task.wait()
+        Functions.GetRoot(plr).CFrame = CFrame.new(
+            pos.X + vel.X * ping * 3.5,
+            pos.Y + vel.Y * ping * 2,
+            pos.Z + vel.Z * ping * 3.5
+        )
+    end
+end
+
+Functions.Touch = function(x,root)
+    pcall(function()
+        x = x:FindFirstAncestorWhichIsA("Part")
+        if x and firetouchinterest then
+            task.spawn(function()
+                firetouchinterest(x, root, 1)
+                task.wait()
+                firetouchinterest(x, root, 0)
+            end)
+        end
+    end)
+end
+
+Functions.GetPush = function()
+    local TempPush = nil
+    pcall(function()
+        if plr.Backpack:FindFirstChild("Push") then
+            TempPush = plr.Backpack.Push
+            TempPush.Parent = plr.Character
+        else
+            for i,v in pairs(Players:GetPlayers()) do
+                if v.Character and v.Character:FindFirstChild("Push") then
+                    TempPush = v.Character.Push
+                    break
+                end
+            end
+        end
+    end)
+    return TempPush
+end
+
+Functions.CheckPotion = function()
+    if plr.Backpack:FindFirstChild("potion") then
+        return plr.Backpack.potion, true
+    elseif plr.Character:FindFirstChild("potion") then
+        return plr.Character.potion, true
+    end
+    return nil, false
+end
+
+Functions.Push = function(Target)
+    local pushTool = Functions.GetPush()
+    if pushTool then
+        pushTool.PushTool:FireServer(Target.Character)
+    end
+    if plr.Character:FindFirstChild("Push") then
+        plr.Character.Push.Parent = plr.Backpack
+    end
+end
+
+Functions.ToggleRagdoll = function(bool)
+    pcall(function()
+        local scripts = {"Falling down", "Swimming", "StartRagdoll", "Pushed", "RagdollMe"}
+        for _, name in pairs(scripts) do
+            if plr.Character:FindFirstChild(name) then
+                plr.Character[name].Disabled = bool
+            end
+        end
+    end)
+end
+
+Functions.ToggleVoidProtection = function(bool)
+    game.Workspace.FallenPartsDestroyHeight = bool and (0/0) or -500
+end
+
+Functions.PlayAnim = function(id, time, speed)
+    pcall(function()
+        plr.Character.Animate.Disabled = false
+        local hum = plr.Character.Humanoid
+        for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+            track:Stop()
+        end
+        plr.Character.Animate.Disabled = true
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://"..id
+        local track = hum:LoadAnimation(anim)
+        track:Play()
+        track.TimePosition = time
+        track:AdjustSpeed(speed)
+    end)
+end
+
+Functions.StopAnim = function()
+    plr.Character.Animate.Disabled = false
+    for _, track in pairs(plr.Character.Humanoid:GetPlayingAnimationTracks()) do
+        track:Stop()
+    end
+end
+
+Functions.SendNotify = function(title, message, duration)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = title,
+        Text = message,
+        Duration = duration or 5
+    })
+end
+
+Functions.ToggleFling = function(bool)
+    task.spawn(function()
+        if bool then
+            repeat
+                pcall(function()
+                    local root = Functions.GetRoot(plr)
+                    local vel = root.Velocity 
+                    root.Velocity = Vector3.new(math.random(-1500,1500), -250000, math.random(-1500,1500))
+                    RunService.RenderStepped:Wait()
+                    root.Velocity = vel
+                end)
+                RunService.Heartbeat:Wait()
+            until not bool
+        end
+    end)
+end
+
+Functions.ToggleFly = function(button, speed)
+    -- Implement fly logic here
+    Functions.SendNotify("RainInforced", "Fly toggle - implement full logic", 3)
+end
+
+Functions.CreateClickTargetTool = function(callback)
+    local tool = Instance.new("Tool")
+    tool.Name = "ClickTarget"
+    tool.RequiresHandle = false
+    tool.TextureId = "rbxassetid://2716591855"
+    tool.ToolTip = "Click a player to target"
+    
+    tool.Activated:Connect(function()
+        local mouse = plr:GetMouse()
+        local hit = mouse.Target
+        if hit and hit.Parent then
+            local char = hit.Parent:IsA("Model") and hit.Parent or hit.Parent.Parent
+            local player = Players:GetPlayerFromCharacter(char)
+            if player then callback(player) end
+        end
+    end)
+    
+    tool.Parent = plr.Backpack
+end
 
 return Functions

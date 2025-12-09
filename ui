@@ -1,4 +1,4 @@
--- UI Module
+-- RainInforced UI Module
 local UI = {}
 local Players = game:GetService("Players")
 local plr = Players.LocalPlayer
@@ -8,26 +8,32 @@ local SysBroker = Instance.new("ScreenGui")
 SysBroker.Name = "SysBroker"
 SysBroker.Parent = game.CoreGui
 
--- Create all UI elements
+-- Background
 local Background = Instance.new("ImageLabel")
--- ... (all your UI creation code)
+Background.Name = "Background"
+Background.Parent = SysBroker
+-- ... (copy all your background properties)
 
--- Export UI elements
+-- Create all buttons, sections, inputs
+-- ... (copy all your UI creation code from lines 300-2000 of original script)
+
+-- Export everything
 UI.SysBroker = SysBroker
 UI.Background = Background
 UI.Buttons = {
-    Home_Section_Button = Home_Section_Button,
-    Game_Section_Button = Game_Section_Button,
-    -- ... all buttons
+    -- All buttons here
 }
 UI.Sections = {
-    SectionList = SectionList,
-    Home_Section = Home_Section,
-    -- ... all sections
+    -- All sections here
 }
 UI.Inputs = {
-    WalkSpeed_Input = WalkSpeed_Input,
-    -- ... all inputs
+    -- All inputs here
+}
+UI.Labels = {
+    -- All labels here
+}
+UI.Images = {
+    -- All images here
 }
 
 return UI

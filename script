@@ -1,6 +1,7 @@
 --[[
-    RainInforced - Main Script
-    Loads UI and handles core logic
+    RainInforced v2 - Main Script
+    Modified by: GodFirstAlways
+    Discord: https://discord.gg/aCS8sjBVbn
 ]]
 
 -- Check if already loaded
@@ -19,78 +20,69 @@ local version = 2
 -- Services
 local Players = game:GetService("Players")
 local plr = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local Light = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
 local httprequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 local mouse = plr:GetMouse()
 
 -- Global Variables
+_G.RainInforced = _G.RainInforced or {}
 _G.AntiFlingToggled = false
-local ScriptWhitelist = {}
-local ForceWhitelist = {}
-local TargetedPlayer = nil
-local FlySpeed = 50
-local PotionTool = nil
-local SavedCheckpoint = nil
-local MinesFolder = nil
-local FreeEmotesEnabled = false
-local CannonsFolders = {}
 
--- Initialize game-specific elements
+local Config = {
+    ScriptWhitelist = {},
+    ForceWhitelist = {},
+    TargetedPlayer = nil,
+    FlySpeed = 50,
+    PotionTool = nil,
+    SavedCheckpoint = nil,
+    FreeEmotesEnabled = false,
+    MinesFolder = nil,
+    CannonsFolders = {},
+    version = version
+}
+
+-- Initialize game elements
 pcall(function()
-    MinesFolder = game:GetService("Workspace").Landmines
+    Config.MinesFolder = game:GetService("Workspace").Landmines
     for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
         if v.Name == "Cannons" then
-            table.insert(CannonsFolders, v)
+            table.insert(Config.CannonsFolders, v)
         end
     end
 end)
 
 -- Shield function
 _G.shield = function(id)
-    if not table.find(ForceWhitelist, id) then
-        table.insert(ForceWhitelist, id)
+    if not table.find(Config.ForceWhitelist, id) then
+        table.insert(Config.ForceWhitelist, id)
     end
 end
 
 -- Load Functions Module
+print("[RainInforced] Loading functions...")
 local Functions = loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/functions"))()
 
--- Apply functions to global scope
-local RandomChar = Functions.RandomChar
-local ChangeToggleColor = Functions.ChangeToggleColor
-local GetPing = Functions.GetPing
-local GetPlayer = Functions.GetPlayer
-local GetCharacter = Functions.GetCharacter
-local GetRoot = Functions.GetRoot
-local TeleportTO = Functions.TeleportTO
-local PredictionTP = Functions.PredictionTP
-local Touch = Functions.Touch
-local GetPush = Functions.GetPush
-local CheckPotion = Functions.CheckPotion
-local Push = Functions.Push
-local ToggleRagdoll = Functions.ToggleRagdoll
-local ToggleVoidProtection = Functions.ToggleVoidProtection
-local PlayAnim = Functions.PlayAnim
-local StopAnim = Functions.StopAnim
-local SendNotify = Functions.SendNotify
-
 -- Load UI Module
+print("[RainInforced] Loading UI...")
 local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/ui"))()
 
 -- Get UI elements
 local SysBroker = UI.SysBroker
 local Background = UI.Background
-local AllButtons = UI.Buttons
-local AllSections = UI.Sections
-local AllInputs = UI.Inputs
+local Buttons = UI.Buttons
+local Sections = UI.Sections
+local Inputs = UI.Inputs
 
--- Section change function
+-- Expose to functions
+_G.RainInforced.Config = Config
+_G.RainInforced.Functions = Functions
+_G.RainInforced.UI = UI
+
+-- Section Manager
 local function ChangeSection(SectionClicked)
     local SectionClickedName = string.split(SectionClicked.Name, "_")[1]
-    for i,v in pairs(AllSections.SectionList:GetChildren()) do
+    for i,v in pairs(Sections.SectionList:GetChildren()) do
         if v:IsA("TextButton") then
             v.Transparency = (v.Name == SectionClicked.Name) and 0 or 0.5
         end
@@ -103,68 +95,228 @@ local function ChangeSection(SectionClicked)
     end
 end
 
--- Initialize home section
-ChangeSection(AllButtons.Home_Section_Button)
+-- Target Manager
+local function UpdateTarget(player)
+    pcall(function()
+        if table.find(Config.ForceWhitelist, player.UserId) then
+            Functions.SendNotify("RainInforced", "You cant target this player: @"..player.Name.." / "..player.DisplayName, 5)
+            player = nil
+        end
+    end)
+    
+    if player ~= nil then
+        Config.TargetedPlayer = player.Name
+        Inputs.TargetName_Input.Text = player.Name
+        UI.Labels.UserIDTargetLabel.Text = ("UserID: "..player.UserId.."\nDisplay: "..player.DisplayName.."\nJoined: "..os.date("%d-%m-%Y", os.time()-player.AccountAge * 24 * 3600).." [Day/Month/Year]")
+        UI.Images.TargetImage.Image = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+    else
+        Config.TargetedPlayer = nil
+        Inputs.TargetName_Input.Text = "@target..."
+        UI.Labels.UserIDTargetLabel.Text = "UserID: \nDisplay: \nJoined: "
+        UI.Images.TargetImage.Image = "rbxassetid://10818605405"
+        
+        -- Reset target buttons
+        local targetButtons = {
+            Buttons.FlingTarget_Button, Buttons.TouchFling_Button,
+            Buttons.ViewTarget_Button, Buttons.FocusTarget_Button,
+            Buttons.BenxTarget_Button, Buttons.HeadsitTarget_Button,
+            Buttons.StandTarget_Button, Buttons.BackpackTarget_Button,
+            Buttons.DoggyTarget_Button, Buttons.DragTarget_Button
+        }
+        for _, btn in pairs(targetButtons) do
+            if btn.Ticket_Asset then
+                btn.Ticket_Asset.ImageColor3 = Color3.fromRGB(255, 0, 0)
+            end
+        end
+    end
+end
 
--- Setup section buttons
-AllButtons.Home_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Home_Section_Button)
-end)
+-- Initialize
+ChangeSection(Buttons.Home_Section_Button)
 
-AllButtons.Game_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Game_Section_Button)
-end)
+-- SECTION NAVIGATION
+Buttons.Home_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Home_Section_Button) end)
+Buttons.Game_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Game_Section_Button) end)
+Buttons.Character_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Character_Section_Button) end)
+Buttons.Target_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Target_Section_Button) end)
+Buttons.Animations_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Animations_Section_Button) end)
+Buttons.Misc_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Misc_Section_Button) end)
+Buttons.Credits_Section_Button.MouseButton1Click:Connect(function() ChangeSection(Buttons.Credits_Section_Button) end)
 
-AllButtons.Character_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Character_Section_Button)
-end)
-
-AllButtons.Target_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Target_Section_Button)
-end)
-
-AllButtons.Animations_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Animations_Section_Button)
-end)
-
-AllButtons.Misc_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Misc_Section_Button)
-end)
-
-AllButtons.Credits_Section_Button.MouseButton1Click:Connect(function()
-    ChangeSection(AllButtons.Credits_Section_Button)
-end)
-
--- GAME SECTION FUNCTIONS
-local AntiRagdollFunction = nil
-AllButtons.AntiRagdoll_Button.MouseButton1Click:Connect(function()
-    ChangeToggleColor(AllButtons.AntiRagdoll_Button)
-    ToggleRagdoll(true)
-    if AllButtons.AntiRagdoll_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
-        AntiRagdollFunction = GetRoot(plr).ChildAdded:Connect(function(Force)
+-- GAME SECTION
+local AntiRagdollConnection = nil
+Buttons.AntiRagdoll_Button.MouseButton1Click:Connect(function()
+    Functions.ChangeToggleColor(Buttons.AntiRagdoll_Button)
+    Functions.ToggleRagdoll(true)
+    if Buttons.AntiRagdoll_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
+        AntiRagdollConnection = Functions.GetRoot(plr).ChildAdded:Connect(function(Force)
             if Force.Name == "PushForce" then
                 Force.MaxForce = Vector3.new(0,0,0)
                 Force.Velocity = Vector3.new(0,0,0)
             end
         end)
     else
-        ToggleRagdoll(false)
-        AntiRagdollFunction:Disconnect()
+        Functions.ToggleRagdoll(false)
+        if AntiRagdollConnection then AntiRagdollConnection:Disconnect() end
     end
 end)
 
--- Add more button connections here...
--- (Copy all your existing button logic from the original script)
+Buttons.PushAura_Button.MouseButton1Click:Connect(function()
+    Functions.ChangeToggleColor(Buttons.PushAura_Button)
+    if Buttons.PushAura_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
+        task.spawn(function()
+            repeat
+                task.wait(0.3)
+                for i,v in pairs(Players:GetPlayers()) do
+                    if v ~= plr and not table.find(Config.ScriptWhitelist, v.UserId) and not table.find(Config.ForceWhitelist, v.UserId) then
+                        Functions.Push(v)
+                    end
+                end
+            until Buttons.PushAura_Button.Ticket_Asset.ImageColor3 ~= Color3.fromRGB(0,255,0)
+        end)
+    end
+end)
 
--- Open/Close GUI
-AllButtons.OpenClose.MouseButton1Click:Connect(function()
+Buttons.VoidProtection_Button.MouseButton1Click:Connect(function()
+    Functions.ChangeToggleColor(Buttons.VoidProtection_Button)
+    Functions.ToggleVoidProtection(Buttons.VoidProtection_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0))
+end)
+
+Buttons.TouchFling_Button.MouseButton1Click:Connect(function()
+    Functions.ChangeToggleColor(Buttons.TouchFling_Button)
+    if Buttons.TouchFling_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
+        local fixpos = Functions.GetRoot(plr).Position
+        Functions.ToggleVoidProtection(true)
+        Functions.ToggleFling(true)
+        Functions.TeleportTO(fixpos.X, fixpos.Y, fixpos.Z, "pos", "safe")
+        Functions.ToggleVoidProtection(false)
+        if Buttons.VoidProtection_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
+            Functions.ToggleVoidProtection(true)
+        end
+    else
+        Functions.ToggleFling(false)
+    end
+end)
+
+-- CHARACTER SECTION
+Buttons.Fly_Button.MouseButton1Click:Connect(function()
+    Functions.ToggleFly(Buttons.Fly_Button, Config.FlySpeed)
+end)
+
+Buttons.WalkSpeed_Button.MouseButton1Click:Connect(function()
+    local speed = tonumber(Inputs.WalkSpeed_Input.Text:gsub("%D", "")) or 16
+    plr.Character.Humanoid.WalkSpeed = speed
+    Functions.SendNotify("RainInforced", "Walk speed updated to "..speed, 3)
+end)
+
+Buttons.JumpPower_Button.MouseButton1Click:Connect(function()
+    local power = tonumber(Inputs.JumpPower_Input.Text:gsub("%D", "")) or 50
+    plr.Character.Humanoid.JumpPower = power
+    Functions.SendNotify("RainInforced", "Jump power updated to "..power, 3)
+end)
+
+Buttons.FlySpeed_Button.MouseButton1Click:Connect(function()
+    Config.FlySpeed = tonumber(Inputs.FlySpeed_Input.Text:gsub("%D", "")) or 50
+    Functions.SendNotify("RainInforced", "Fly speed updated to "..Config.FlySpeed, 3)
+end)
+
+Buttons.SaveCheckpoint_Button.MouseButton1Click:Connect(function()
+    Config.SavedCheckpoint = Functions.GetRoot(plr).Position
+    Functions.SendNotify("RainInforced", "Checkpoint saved!", 3)
+end)
+
+Buttons.ClearCheckpoint_Button.MouseButton1Click:Connect(function()
+    Config.SavedCheckpoint = nil
+    Functions.SendNotify("RainInforced", "Checkpoint cleared!", 3)
+end)
+
+Buttons.Respawn_Button.MouseButton1Click:Connect(function()
+    local pos = Functions.GetRoot(plr).Position
+    plr.Character.Humanoid.Health = 0
+    plr.CharacterAdded:Wait()
+    task.wait(0.1)
+    Functions.TeleportTO(pos.X, pos.Y, pos.Z, "pos", "safe")
+end)
+
+-- TARGET SECTION
+Inputs.TargetName_Input.FocusLost:Connect(function()
+    local target = Functions.GetPlayer(Inputs.TargetName_Input.Text)
+    UpdateTarget(target)
+end)
+
+Buttons.ClickTargetTool_Button.MouseButton1Click:Connect(function()
+    Functions.CreateClickTargetTool(UpdateTarget)
+end)
+
+Buttons.TeleportTarget_Button.MouseButton1Click:Connect(function()
+    if Config.TargetedPlayer then
+        Functions.TeleportTO(0, 0, 0, Players[Config.TargetedPlayer], "safe")
+    end
+end)
+
+Buttons.PushTarget_Button.MouseButton1Click:Connect(function()
+    if Config.TargetedPlayer then
+        local target = Players[Config.TargetedPlayer]
+        local pushpos = Functions.GetRoot(plr).CFrame
+        Functions.PredictionTP(target)
+        task.wait(Functions.GetPing() + 0.05)
+        Functions.Push(target)
+        Functions.GetRoot(plr).CFrame = pushpos
+    end
+end)
+
+-- MISC SECTION
+Buttons.AntiFling_Button.MouseButton1Click:Connect(function()
+    Functions.ChangeToggleColor(Buttons.AntiFling_Button)
+    _G.AntiFlingToggled = Buttons.AntiFling_Button.Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0)
+    if _G.AntiFlingToggled then
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/AntiFling'))()
+    end
+end)
+
+Buttons.Rejoin_Button.MouseButton1Click:Connect(function()
+    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
+end)
+
+Buttons.InfYield_Button.MouseButton1Click:Connect(function()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+end)
+
+-- GUI Toggle
+Buttons.OpenClose.MouseButton1Click:Connect(function()
     Background.Visible = not Background.Visible
 end)
 
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessedEvent)
-    if gameProcessedEvent then return end
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.B then
         Background.Visible = not Background.Visible
+    end
+end)
+
+-- Character respawn handler
+plr.CharacterAdded:Connect(function(char)
+    task.wait(0.1)
+    char:WaitForChild("Humanoid")
+    
+    if Config.SavedCheckpoint then
+        Functions.TeleportTO(Config.SavedCheckpoint.X, Config.SavedCheckpoint.Y, Config.SavedCheckpoint.Z, "pos", "safe")
+    end
+    
+    -- Reset toggles
+    local resetButtons = {
+        {Buttons.PotionDi_Button, "PotionDick"},
+        {Buttons.PotionFling_Button, "PotionFling"},
+        {Buttons.AntiRagdoll_Button, "AntiRagdoll"},
+        {Buttons.SpamMines_Button, "SpamMines"},
+        {Buttons.Fly_Button, "Fly"}
+    }
+    
+    for _, data in pairs(resetButtons) do
+        if data[1].Ticket_Asset.ImageColor3 == Color3.fromRGB(0,255,0) then
+            Functions.ChangeToggleColor(data[1])
+            Functions.SendNotify("RainInforced", data[2].." was auto-disabled on respawn", 3)
+        end
     end
 end)
 
@@ -172,9 +324,9 @@ end)
 task.spawn(function()
     while task.wait(10) do
         pcall(function()
-            local GuiVersion = loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/version"))()
-            if version < GuiVersion then
-                SendNotify("RainInforced", "You are not using the latest version, run the script again.", 5)
+            local latestVersion = loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/version"))()
+            if version < latestVersion then
+                Functions.SendNotify("RainInforced", "Update available! Reloading...", 5)
                 task.wait(5)
                 SysBroker:Destroy()
                 game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
@@ -183,7 +335,13 @@ task.spawn(function()
     end
 end)
 
--- Welcome message
-SendNotify("RainInforced", "Gui modified by GodFirstAlways - Discord in your clipboard JOIN IT", 10)
+-- Welcome
+Functions.SendNotify("RainInforced", "Loaded! Press [B] to toggle. Discord copied to clipboard!", 10)
 setclipboard("https://discord.gg/aCS8sjBVbn")
-loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/premium"))()
+
+-- Load premium features
+pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/GodFirstAlways/RainInforced/main/premium"))()
+end)
+
+print("[RainInforced] Loaded successfully!")
